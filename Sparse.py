@@ -77,32 +77,82 @@ class SparseMatrix:
     def intern_represent(self):
         return self._intern_represent
 
-    def edit(self, a, x, y):  # Will not work yet
-        in_matrix = False
-        index = None
-        for i in range(np.size(self._col_index)):  # Check if indices exist in matrix
-            index = i
-            if (self._col_index[i], self._row_counter[i]) == (x, y):
-                in_matrix = True
-                break
+    def edit(self, x, i, j):
+        isOccupied = False
+        nonZero = False
+        V = self._V
+        Col = self._col_index
+        Row = self._row_counter
+        
+        if i > self._shape[0] - 1:
+            self._col_index = np.append(self._col_index, j)
+            self._V = np.append(self._V, x)
+            print(np.size(self._row_counter))
+            while np.size(self._row_counter) - 1 <= i:
+                self._row_counter = np.append(self._row_counter, self._row_counter[-1])
+            self._row_counter[-1] += 1
+            
+        else:
+            row_start  = self._row_counter[i]
+            row_end  = self._row_counter[i+1]
+            
+            if abs(x) > tol:
+                nonZero = True
 
-            if self._col_index[i] > x or (self._col_index[i] == x and self._row_counter[i] > y):
-                break
-
-        if in_matrix:
-            if a != 0:  # simple edit
-                self._V[index] = a
-                self._col_index[index] = x
-                self._row_counter[index] = y
-            else:  # remove from matrix
+            if j in self._col_index[row_start:row_end]:
+                isOccupied  = True
+            
+            if isOccupied and nonZero:
+                workCol = Col[row_start:row_end]
+                workV = V[row_start:row_end]
+                n = 0
+                while j > workCol[n]:
+                    n += 1
+                workV[n] = x
+                self._V = np.concatenate((V[0:row_start], workV, V[row_end:len(V)]))
+                
+            elif not isOccupied and nonZero:
+                workCol = Col[row_start:row_end]
+                workV = V[row_start:row_end]
+                
+                if (workCol.size == 0) or (j > np.max(workCol)):
+                    workCol = np.append(workCol, [j])
+                    workV = np.append(workV, [x])
+                else:
+                    n = 0
+                    while j > workCol[n]:
+                        n += 1
+                    workCol = np.insert(workCol, n, j)
+                    workV = np.insert(workV, n, x)
+                
+                for a in range(i + 1, len(Row)):
+                    Row[a] += 1
+                    
+                self._col_index = np.concatenate((Col[0:row_start], workCol, Col[row_end:len(Col)]))
+                self._V = np.concatenate((V[0:row_start], workV, V[row_end:len(V)]))
+                self._row_counter = Row
+                self._number_of_nonzero += 1
+            
+            elif isOccupied and not nonZero:
+                workCol = Col[row_start:row_end]
+                workV = V[row_start:row_end]
+                n = 0
+                while j > workCol[n]:
+                    n += 1
+                workCol = np.delete(workCol, n)
+                workV = np.delete(workV, n)
+                for a in range(i + 1, len(Row)):
+                    Row[a] -= 1
+                self._col_index = np.concatenate((Col[0:row_start], workCol, Col[row_end:len(Col)]))
+                self._V = np.concatenate((V[0:row_start], workV, V[row_end:len(V)]))
+                self._row_counter = Row
                 self._number_of_nonzero -= 1
-                self._V = np.concat(self._V[:index], self._V[index+1:])
-                self._col_index = np.concat(self._col_index[:index], self._col_index[index+1:])
-                self._row_counter = np.concat(self._col_index[:index], self._col_index[index + 1:])
-
-        elif not in_matrix and a != 0:
-            self._number_of_nonzero += 1
-            self._V = np.concat(self._V[:index], a, self._V[index:])
+                
+            while self._row_counter[-1] == self._row_counter[-2]:
+                self._row_counter = np.delete(self._row_counter, -1)
+            
+            
+        self._shape = (np.size(self._row_counter) - 1, int(np.max(self._col_index)) + 1)
     
     def __add__(self, other):
         if self._intern_represent != other._intern_represent:
@@ -145,62 +195,6 @@ class SparseMatrix:
         sum._intern_represent = 'CSR'
         sum._shape = self._shape
         return sum
-
-    def edit(self, x, i, j):
-        isOccupied = False
-        nonZero = False
-        row_start  = self._row_counter[i]
-        row_end  = self._row_counter[i+1]
-        V = self._V
-        Col = self._col_index
-        Row = self._row_counter
-        
-
-        if abs(x) > tol:
-            nonZero = True
-
-        if j in self._col_index[row_start:row_end]:
-            isOccupied  = True
-        
-        if isOccupied and nonZero:
-            self._V[j] = x
-            
-        elif not isOccupied and nonZero:
-            workCol = Col[row_start:row_end]
-            workV = V[row_start:row_end]
-            
-            if (j > max(workCol)) or (workCol.size == 0):
-                np.append(workCol, j)
-                np.append(workV, x)
-            else:
-                n = 0
-                while j > workCol[n]:
-                    n += 1
-                np.insert(workCol, n, j)
-                np.insert(workV, n, x)
-            
-            for a in range(i, len(Row)):
-                Row[a] += 1
-                
-            self._col_index = np.concatenate(Col[0:row_start], workCol, Col[row_end:-1])
-            self._V = np.concatenate(V[0:row_start], workV, V[row_end:-1])
-            self._row_counter = Row
-            self._number_of_nonzero += 1
-        
-        elif isOccupied and not nonZero:
-            workCol = Col[row_start:row_end]
-            workV = V[row_start:row_end]
-            np.delete(workCol, j)
-            np.delete(workV, j)
-            for a in range(i, len(Row)):
-                Row[a] -= 1
-            self._col_index = np.concatenate(Col[0:row_start], workCol, Col[row_end:-1])
-            self._V = np.concatenate(V[0:row_start], workV, V[row_end:-1])
-            self._row_counter = Row
-            self._number_of_nonzero += 1
-            
-        else:
-            #nothing :-)
 
     @staticmethod
     def manual_toeplitz(n: int):

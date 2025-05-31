@@ -13,7 +13,7 @@ class SparseMatrix:
         row_counter: Number of nonzero elements in a row such that row i contains
         row_counter[i+1] - row_counter[i] elements (0-indexed). \n
         number_of_nonzero: Total number of nonzero elements in matrix. \n
-        intern_represent: Sparse matrix compression format. \n
+        intern_represent: Sparse matrix compression format.
         shape: shape of the uncompressed matrix
 
         :param arr: Numpy sparse matrix to be compressed
@@ -32,14 +32,8 @@ class SparseMatrix:
             self._shape = (0,)
             return
 
-        if arr.shape[1] is None:
-            rows = 1
-            cols = arr.shape[0]
-        else:
-            rows, cols = arr.shape
-
-        for i in range(rows):
-            for j in range(cols):
+        for i in range(arr.shape[0]):
+            for j in range(arr.shape[1]):
                 if abs(arr[i, j]) > tol:
                     temp_number_of_nonzero += 1
                     temp_V.append(arr[i, j])
@@ -126,7 +120,7 @@ class SparseMatrix:
         sum._shape = self._shape
         return sum
         
-    def vec_mul(self, arr: np.array):
+    def __vec__mul__ (self, arr: np.array):
     
         Pre_mul = []    #every columb index has a corresponding value in the multiplier vector which is stored in Pre_mul
         New_matrix_list = []    #slicelist post multiplikation
@@ -146,16 +140,23 @@ class SparseMatrix:
             V_sum = sum(Vlist)              #sums up each list giving the total worth of one row in the new array
             New_matrix_list.append(V_sum)
         
-        New_matrix_array = np.array(New_matrix_list)                 #makes the list an array again
+        New_matrix_array = np.array([New_matrix_list])                 #makes the list an array that can later be converted into a new sparse matrix
             
         return New_matrix_array   
 
     def edit(self, x, i, j):
+        """
+        Edits a certain cell in a matrix A stored in CSR format. 
+        Takes in a value, x, and row and column, i and j, where said value is to be placed.
+        The function allows for a value to be placed in a cell "outide" of the original matrix
+        A's bounds, by considering it as a larger, similar matrix, where the outer rows and columns 
+        are filled with zeroes and thus updating the shape of the matrix. Similarly, if an edit 
+        makes the last row or column contain no nonzeroes, it reduces the shape of the matrix.
+        
+        """
+        
         isOccupied = False
         nonZero = False
-        V = self._V
-        Col = self._col_index
-        Row = self._row_counter
         
         if abs(x) > tol:
             nonZero = True
@@ -187,8 +188,8 @@ class SparseMatrix:
                 isOccupied  = True
             
             if isOccupied and nonZero:     #case if the cell is occupied and changed to a nonzero
-                workCol = Col[row_start:row_end]
-                workV = V[row_start:row_end]
+                workCol = self._col_index[row_start:row_end]
+                workV = self._V[row_start:row_end]
                 n = 0
                 while j > workCol[n]:     #sorts the new value in the correct spot for Values and column_index
                     n += 1
@@ -196,8 +197,8 @@ class SparseMatrix:
                 self._V = np.concatenate((V[0:row_start], workV, V[row_end:len(V)]))
                 
             elif not isOccupied and nonZero:    #case if the cell is not occupied and changed to a nonzero
-                workCol = Col[row_start:row_end]
-                workV = V[row_start:row_end]
+                workCol = self._col_index[row_start:row_end]
+                workV = self._V[row_start:row_end]
                 
                 if (workCol.size == 0) or (j > np.max(workCol)):
                     workCol = np.append(workCol, j)
@@ -209,27 +210,25 @@ class SparseMatrix:
                     workCol = np.insert(workCol, n, j)
                     workV = np.insert(workV, n, x)
                 
-                for a in range(i + 1, len(Row)):     #corrects the row_counter
-                    Row[a] += 1
+                for a in range(i + 1, len(self._row_counter)):     #corrects the row_counter
+                    self._row_counter[a] += 1
                     
                 self._col_index = np.concatenate((Col[0:row_start], workCol, Col[row_end:len(Col)]))
                 self._V = np.concatenate((V[0:row_start], workV, V[row_end:len(V)]))
-                self._row_counter = Row
                 self._number_of_nonzero += 1      #corrects the NNZ-counter
             
             elif isOccupied and not nonZero:    #case for when the cell is occupied and changed to a zero 
-                workCol = Col[row_start:row_end]
+                workCol = self._col_index[row_start:row_end]
                 workV = V[row_start:row_end]
                 n = 0
                 while j > workCol[n]:
                     n += 1
                 workCol = np.delete(workCol, n)
                 workV = np.delete(workV, n)
-                for a in range(i + 1, len(Row)):
-                    Row[a] -= 1
+                for a in range(i + 1, len(self._row_counter)):
+                    self._row_counter[a] -= 1
                 self._col_index = np.concatenate((Col[0:row_start], workCol, Col[row_end:len(Col)]))
                 self._V = np.concatenate((V[0:row_start], workV, V[row_end:len(V)]))
-                self._row_counter = Row
                 self._number_of_nonzero -= 1
                 
             while self._row_counter[-1] == self._row_counter[-2]:   #shortens the row_counter if the last row only has zeros 
